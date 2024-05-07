@@ -7,6 +7,10 @@ terraform {
   }
 }
 
+variable "vm_count" {
+  default = 2
+}
+
 provider "libvirt" {
   uri = "qemu:///system"
 }
@@ -67,46 +71,51 @@ resource "libvirt_network" "ovs_network" {
   name       = "ovs-network"
   mode       = "bridge"
   bridge     = "ovsbr0"
-  addresses  = ["192.168.100.0/24"]
-  autostart  = true
+  # addresses  = ["192.168.100.0/24"]
+  autostart = true
 }
 
-# resource "libvirt_network" "vm_network" {
-#   name      = "vm-network"
-#   mode      = "nat"
-#   addresses = ["192.168.122.0/24"]
-#   # autostart = true
-# }
-
 resource "libvirt_volume" "vm_disk" {
-  count          = 2
+  count          = var.vm_count
   name           = "vm-disk-${count.index}"
   pool           = libvirt_pool.test_vm_storage_pool.name
   format         = "qcow2"
   base_volume_id = libvirt_volume.ubuntu_base.id
 }
 
+# resource "libvirt_cloudinit_disk" "commoninit" {
+#   count          = var.vm_count
+#   name           = "commoninit-${count.index}.iso"
+#   pool           = libvirt_pool.test_vm_storage_pool.name
+#   network_config = data.template_file.network_config[count.index].rendered
+# }
+
+# data "template_file" "network_config" {
+#   count    = var.vm_count
+#   template = file("${path.module}/network_config.cfg")
+#   vars = {
+#     ip_address = "192.168.100.${count.index + 10}"
+#     gateway    = "192.168.100.1"
+#   }
+# }
+
 resource "libvirt_domain" "vm" {
-  count  = 2
+  count  = var.vm_count
   name   = "vm-${count.index}"
   memory = "4096"
   vcpu   = 2
 
   network_interface {
-    bridge    = libvirt_network.ovs_network.bridge
-    addresses = ["192.168.100.${count.index + 50}"]
+    bridge = libvirt_network.ovs_network.bridge
+    # addresses = ["192.168.100.${count.index + 50}"]
     # mac    = "52:54:00:00:00:${count.index + 1}"
   }
-
-  # network_interface {
-  #   network_id = libvirt_network.vm_network.id
-  #   addresses  = ["192.168.122.${count.index + 50}"]
-  #   mac        = "52:54:00:01:00:${count.index + 1}"
-  # }
 
   xml {
     xslt = file("ovs-port.xsl")
   }
+
+  # cloudinit = libvirt_cloudinit_disk.commoninit[count.index].id
 
   disk {
     volume_id = libvirt_volume.vm_disk[count.index].id
@@ -118,4 +127,5 @@ resource "libvirt_domain" "vm" {
     listen_address = "127.0.0.1"
     autoport       = true
   }
+
 }
