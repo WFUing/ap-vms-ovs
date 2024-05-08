@@ -67,10 +67,10 @@ resource "libvirt_volume" "ubuntu_base" {
 # }
 
 resource "libvirt_network" "ovs_network" {
-  name       = "ovs-network"
-  mode       = "bridge"
-  bridge     = "ovsbr0"
-  # addresses  = ["192.168.100.0/24"]
+  name   = "ovs-network"
+  mode   = "bridge"
+  bridge = "ovsbr0"
+  # addresses = ["192.168.100.0/24"]
   autostart = true
 }
 
@@ -82,21 +82,30 @@ resource "libvirt_volume" "vm_disk" {
   base_volume_id = libvirt_volume.ubuntu_base.id
 }
 
-# resource "libvirt_cloudinit_disk" "commoninit" {
-#   count          = var.vm_count
-#   name           = "commoninit-${count.index}.iso"
-#   pool           = libvirt_pool.test_vm_storage_pool.name
-#   network_config = data.template_file.network_config[count.index].rendered
-# }
+resource "libvirt_cloudinit_disk" "commoninit" {
+  count          = var.vm_count
+  name           = "commoninit-${count.index}.iso"
+  pool           = libvirt_pool.test_vm_storage_pool.name
+  network_config = data.template_file.network_config[count.index].rendered
+  user_data      = data.template_file.user_data[count.index].rendered
+}
 
-# data "template_file" "network_config" {
-#   count    = var.vm_count
-#   template = file("${path.module}/network_config.cfg")
-#   vars = {
-#     ip_address = "192.168.100.${count.index + 10}"
-#     gateway    = "192.168.100.1"
-#   }
-# }
+data "template_file" "user_data" {
+  count    = var.vm_count
+  template = file("${path.module}/user_data.yaml")
+  vars = {
+    name = "vm-${count.index}"
+  }
+}
+
+data "template_file" "network_config" {
+  count    = var.vm_count
+  template = file("${path.module}/network_config.yaml")
+  vars = {
+    ip_address = "192.168.100.${count.index + 10}"
+    gateway    = "192.168.100.1"
+  }
+}
 
 resource "libvirt_domain" "vm" {
   count  = var.vm_count
@@ -114,11 +123,11 @@ resource "libvirt_domain" "vm" {
     xslt = file("ovs-port.xsl")
   }
 
-  # cloudinit = libvirt_cloudinit_disk.commoninit[count.index].id
-
   disk {
     volume_id = libvirt_volume.vm_disk[count.index].id
   }
+
+  cloudinit = libvirt_cloudinit_disk.commoninit[count.index].id
 
   graphics {
     type           = "vnc"
@@ -127,4 +136,9 @@ resource "libvirt_domain" "vm" {
     autoport       = true
   }
 
+  console {
+    type        = "pty"
+    target_type = "serial"
+    target_port = "0"
+  }
 }
