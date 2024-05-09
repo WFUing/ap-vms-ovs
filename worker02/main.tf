@@ -19,7 +19,7 @@ resource "libvirt_pool" "test_vm_storage_pool" {
   name = "worker02-vm-storage-pool"
   type = "dir"
   # path = "/home/wfuing/test/images"
-  path = "/home/wds/zhitai/test/images1"
+  path = "/home/wds/zhitai/test/images2"
 }
 
 resource "libvirt_volume" "ubuntu_base" {
@@ -31,9 +31,9 @@ resource "libvirt_volume" "ubuntu_base" {
 }
 
 resource "libvirt_network" "ovs_network" {
-  name   = "worker01-network"
+  name   = "worker02-network"
   mode   = "bridge"
-  bridge = "ovsbr3"
+  bridge = "ovsbr2"
   # addresses = ["192.168.100.0/24"]
   autostart = true
 }
@@ -65,7 +65,7 @@ data "template_file" "network_config" {
 
 resource "libvirt_domain" "vm" {
   count  = var.vm_count
-  name   = "worker-vm-${count.index}"
+  name   = "worker02-vm-${count.index}"
   memory = "4096"
   vcpu   = 2
 

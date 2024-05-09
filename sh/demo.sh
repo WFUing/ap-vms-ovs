@@ -20,8 +20,12 @@ virsh undefine vm-2 --remove-all-storage
 
 virsh shutdown worker-vm-0 
 virsh shutdown worker-vm-1 
+virsh shutdown worker02-vm-0 
+virsh shutdown worker02-vm-1 
 virsh shutdown head-vm 
 
 virsh undefine worker-vm-0 --remove-all-storage
 virsh undefine worker-vm-1 --remove-all-storage
+virsh undefine worker02-vm-0 --remove-all-storage
+virsh undefine worker02-vm-1 --remove-all-storage
 virsh undefine head-vm --remove-all-storage
