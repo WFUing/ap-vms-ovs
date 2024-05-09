@@ -1,2 +1,0 @@
-hostname: ${name}
-manage_etc_hosts: true

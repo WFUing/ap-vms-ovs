@@ -1,3 +1,6 @@
+
+![](img/apvm.png)
+
 ## 准备vm
 
 - 安装qemu和libvirt、virt-manager，
@@ -103,6 +106,8 @@ ffmpeg -loop 1 -re -i /media/wds/zhitai/images.jpeg -f v4l2 -vcodec rawvideo -pi
 
 ```sh
 ffplay /dev/video10
+# 或
+fswebcam -d /dev/video0 output.jpg
 ```
 
 **设置开机启动服务**
@@ -149,7 +154,7 @@ Description=Start Virtual Webcam
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/ffmpeg -stream_loop -1 -re -i /home/ubuntu/video.mp4 -map 0:v -f v4l2 /dev/video10
+ExecStart=/usr/bin/ffmpeg -stream_loop -1 -re -i /home/ubuntu/video.mp4 -map 0:v -vcodec mjpeg -q:v 2 -f v4l2 /dev/video10
 Restart=always
 RestartSec=5
 
@@ -157,11 +162,23 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
+- `-vcodec mjpeg`: 指定视频编解码器为 MJPEG。
+- `-q:v 2`: 设置视频质量，数值范围通常是 2-31，数值越小质量越高。你可以根据需要调整这个值以获得最佳质量和性能平衡。
+- `-stream_loop -1`: 使视频文件循环播放无限次。
+- `-re`: 按照原始帧率读取文件，模拟实时数据流。
+- `-i /home/ubuntu/video.mp4`: 指定输入文件。
+- `-map 0:v`: 从输入文件中选择视频流。
+- `-vcodec mjpeg`: 使用 MJPEG 编解码器，这是一种每帧都完整压缩的视频流格式，基于 JPEG。
+- `-q:v 2`: 设置 JPEG 压缩质量，数值越低质量越高。
+- `-f v4l2`: 指定输出格式为 Video4Linux2。
+- `/dev/video0`: 指定输出设备。
+
 启用并启动服务
 
 ```sh
 sudo systemctl enable virtual-webcam.service
-sudo systemctl start virtual-web
+sudo systemctl start virtual-cam.service
+sudo systemctl restart virtual-cam.service
 ```
 
 重启即可
@@ -288,6 +305,8 @@ sudo ip addr del 192.168.100.1/24 dev ovsbr0
 
 如果你的网络环境支持静态 IP 或者你已经有指定的 IP 地址范围，你可以手动为 ens3 设置 IP 地址。在虚拟机中执行以下命令：
 
+**很多时候的问题都是接口没有激活，得先up一下**
+
 ```sh
 sudo ip addr add 192.168.100.10/24 dev ens3
 sudo ip link set ens3 up
@@ -297,6 +316,57 @@ sudo ip link set ens3 up
 
 ```sh
 sudo ip route add default via 192.168.100.1
+```
+
+可以写成开机自启动，开机的时候挂载一个hdd的iso
+
+使用 vim 创建脚本文件
+
+```sh
+sudo vim /usr/local/bin/mount_and_apply_netplan.sh
+```
+
+```sh
+#!/bin/bash
+mount /dev/sr0 /mnt
+cp /mnt/network-config /etc/netplan/01-netcfg.yaml
+netplan apply
+```
+
+使脚本可执行
+
+```sh
+sudo chmod +x /usr/local/bin/mount_and_apply_netplan.sh
+```
+
+创建 systemd 服务单元文件
+
+```sh
+sudo vim /etc/systemd/system/mount_netplan.service
+```
+
+```
+[Unit]
+Description=Mount sr0 and apply netplan configuration
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mount_and_apply_netplan.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用并启动服务
+
+```sh
+sudo systemctl daemon-reload
+
+sudo systemctl enable mount_netplan.service
+
+sudo systemctl start mount_netplan.service
 ```
 
 **使用 DHCP 自动获取 IP 地址**
@@ -394,11 +464,211 @@ iface ens3 inet dhcp
 sudo systemctl restart networking
 ```
 
+**配置开机设置网络的服务**
+
+名称为 wfuing_network_init
+
+```sh
+sudo vim /etc/wfuing_network_init.sh
+```
+
+在编辑器中输入以下内容：
+
+```sh
+#!/bin/bash
+mkdir -p /mnt
+mount /dev/sr0 /mnt
+cp /mnt/network-config /etc/netplan/01-netcfg.yaml
+netplan apply
+```
+
+给脚本执行权限：
+
+```sh
+sudo chmod +x /etc/wfuing_network_init.sh
+```
+
+创建 systemd 服务文件：
+
+```sh
+sudo vim /etc/systemd/system/wfuing_network_init.service
+```
+
+在编辑器中添加以下内容：
+
+```
+[Unit]
+Description=Initialize network settings at startup
+
+[Service]
+Type=oneshot
+ExecStart=/etc/wfuing_network_init.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用并启动服务：
+
+```sh
+sudo systemctl enable wfuing_network_init.service
+sudo systemctl start wfuing_network_init.service
+```
+
+**限制端口流量**
+
+定义 QoS 和队列
+
+```sh
+# 创建 QoS 规则并同时定义两个队列
+sudo ovs-vsctl -- --id=@qos create QoS type=linux-htb other-config:max-rate=250000 queues:1=@q1 queues:2=@q2 -- \
+                --id=@q1 create Queue other-config:min-rate=160000 other-config:max-rate=250000 -- \
+                --id=@q2 create Queue other-config:min-rate=160000 other-config:max-rate=200000 \
+                -- set Port YOUR-BRIDGE-PORT qos=@qos
+```
+
+在这个例子中：
+
+- `YOUR-BRIDGE-PORT` 是需要应用带宽限制的端口名称。
+- `max-rate` 是最大速率限制，单位是 bps（比特每秒），这里 250000 对应250kbps。
+- `min-rate` 是最小速率限制，同样单位是 bps，这里 160000 对应160kbps。
+- 创建了两个队列：`@q1` 用于 Multi-tone（限制为250kbps），`@q2` 用于 Single-tone（限制为200kbps）。
+
+应用 QoS 到特定端口，修改上面的命令中的 YOUR-BRIDGE-PORT 来指定正确的端口。
+
+完成配置后，可以使用以下命令来检查 QoS 设置是否已正确应用：
+
+```sh
+sudo ovs-vsctl list qos
+sudo ovs-vsctl list queue
+```
+
+## libvirt操作
+
+- 查看和管理虚拟机
+  - 列出所有虚拟机: `virsh list --all`
+  - 启动虚拟机: `virsh start <vm_name>`
+  - 关闭虚拟机: `virsh shutdown <vm_name>`
+  - 强制关闭虚拟机 (类似于断电): `virsh destroy <vm_name>`
+  - 重启虚拟机: `virsh reboot <vm_name>`
+  - 暂停虚拟机: `virsh suspend <vm_name>`
+  - 恢复暂停的虚拟机: `virsh resume <vm_name>`
+- 管理虚拟机快照
+  - 创建快照: `virsh snapshot-create-as <vm_name> <snapshot_name>`
+  - 列出所有快照: `virsh snapshot-list <vm_name>`
+  - 恢复快照: `virsh snapshot-revert <vm_name> <snapshot_name>`
+  - 删除快照: `virsh snapshot-delete <vm_name> <snapshot_name>`
+- 配置和资源管理
+  - 查看虚拟机配置: `virsh dumpxml <vm_name>`
+  - 编辑虚拟机配置: `virsh edit <vm_name>`
+  - 设置虚拟机自动启动: `virsh autostart <vm_name>`
+  - 取消虚拟机自动启动: `virsh autostart --disable <vm_name>`
+- 网络管理
+  - 列出所有网络: `virsh net-list --all`
+  - 启动一个网络: `virsh net-start <network_name>`
+  - 停止一个网络: `virsh net-destroy <network_name>`
+  - 创建网络: `virsh net-create <xml_file>`
+  - 编辑网络配置: `virsh net-edit <network_name>`
+- 存储管理
+  - 列出所有存储池: `virsh pool-list --all`
+  - 创建存储池: `virsh pool-create <xml_file>`
+  - 删除存储池: `virsh pool-destroy <pool_name>`
+  - 查看存储池信息: `virsh pool-info <pool_name>`
+
+如果要在启动一个pool路径下的虚拟机 
+
+需要给 pool 路径上所有的文件夹目录赋权限，才能使用
+
+```sh
+sudo chown -R libvirt-qemu:kvm /home/wfuing/test/images/
+sudo chmod -R 775 /home/wfuing/test/images/
+sudo chmod -R 775 /home/wfuing/test
+sudo chmod -R 775 /home/wfuing
+# 将一个用户加入组
+sudo gpasswd -a username groupname
+# 查看用户的群组信息
+id username
+# 列出群组成员
+getent group groupname
+```
+
+**virsh console**
+
+如果要[连接到console](https://serverfault.com/questions/364895/virsh-vm-console-does-not-show-any-output)，需要在配置文件中先加上
+
+```xml
+<serial type='pty'>
+  <target port='0'/>
+</serial>
+<console type='pty'>
+  <target type='serial' port='0'/>
+</console>
+```
+
+然后在虚拟机中启动
+
+```sh
+systemctl enable serial-getty@ttyS0.service
+systemctl start serial-getty@ttyS0.service
+```
+
+
+
+```
+resource "null_resource" "enable_ip_forwarding" {
+  provisioner "local-exec" {
+    command = <<EOF
+sudo sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
+EOF
+  }
+}
+
+# 确保创建桥接和设置桥接 IP 地址的资源在启用 IP 转发之后执行
+resource "null_resource" "create_ovs_bridge" {
+  depends_on = [null_resource.enable_ip_forwarding]
+  provisioner "local-exec" {
+    command = <<EOF
+if ! sudo ovs-vsctl br-exists ovsbr0; then
+  sudo ovs-vsctl add-br ovsbr0
+fi
+EOF
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "sudo ovs-vsctl del-br ovsbr0"
+  }
+}
+
+resource "null_resource" "setup_bridge_ip" {
+  depends_on = [null_resource.create_ovs_bridge]
+  provisioner "local-exec" {
+    command = "sudo ip addr add 192.168.100.1/24 dev ovsbr0"
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "sudo ip addr del 192.168.100.1/24 dev ovsbr0"
+  }
+}
+
+data "template_file" "user_data" {
+  count    = var.vm_count
+  template = file("${path.module}/user_data.yaml")
+  vars = {
+    name = "vm-${count.index}"
+  }
+}
+```
+
+
 ## 运行 Actor
 
 ```sh
-go run head/main.go
-go run worker/main.go
+go run head/main.go head --addr <head_addr> --port <head_port>
+go run worker/main.go --addr <worker_addr> --remote_addr <head_addr> --remote_port <head_port>
 ```
 
 
