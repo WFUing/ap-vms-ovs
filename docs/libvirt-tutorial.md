@@ -1,0 +1,32 @@
+
+**libvirt操作**
+
+- 查看和管理虚拟机
+  - 列出所有虚拟机: `virsh list --all`
+  - 启动虚拟机: `virsh start <vm_name>`
+  - 关闭虚拟机: `virsh shutdown <vm_name>`
+  - 强制关闭虚拟机 (类似于断电): `virsh destroy <vm_name>`
+  - 重启虚拟机: `virsh reboot <vm_name>`
+  - 暂停虚拟机: `virsh suspend <vm_name>`
+  - 恢复暂停的虚拟机: `virsh resume <vm_name>`
+- 管理虚拟机快照
+  - 创建快照: `virsh snapshot-create-as <vm_name> <snapshot_name>`
+  - 列出所有快照: `virsh snapshot-list <vm_name>`
+  - 恢复快照: `virsh snapshot-revert <vm_name> <snapshot_name>`
+  - 删除快照: `virsh snapshot-delete <vm_name> <snapshot_name>`
+- 配置和资源管理
+  - 查看虚拟机配置: `virsh dumpxml <vm_name>`
+  - 编辑虚拟机配置: `virsh edit <vm_name>`
+  - 设置虚拟机自动启动: `virsh autostart <vm_name>`
+  - 取消虚拟机自动启动: `virsh autostart --disable <vm_name>`
+- 网络管理
+  - 列出所有网络: `virsh net-list --all`
+  - 启动一个网络: `virsh net-start <network_name>`
+  - 停止一个网络: `virsh net-destroy <network_name>`
+  - 创建网络: `virsh net-create <xml_file>`
+  - 编辑网络配置: `virsh net-edit <network_name>`
+- 存储管理
+  - 列出所有存储池: `virsh pool-list --all`
+  - 创建存储池: `virsh pool-create <xml_file>`
+  - 删除存储池: `virsh pool-destroy <pool_name>`
+  - 查看存储池信息: `virsh pool-info <pool_name>`
