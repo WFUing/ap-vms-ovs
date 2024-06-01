@@ -1,0 +1,10 @@
+provider_installation {
+  filesystem_mirror {
+    path    = "./plugins"
+    include = ["dmacvicar/libvirt", "hashicorp/null", "hashicorp/template", "i2ec.top/local/openvswitch"]
+  }
+
+  direct {
+    exclude = ["dmacvicar/libvirt", "hashicorp/null", "hashicorp/template", "i2ec.top/local/openvswitch"]
+  }
+}

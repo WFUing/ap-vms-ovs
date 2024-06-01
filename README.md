@@ -1,6 +1,8 @@
 
 ![](img/apvm.png)
 
+open-vswitch 的 provider 在 https://github.com/WFUing/terraform-provider-openvswitch
+
 ## 准备vm
 
 - 安装qemu和libvirt、virt-manager，
