@@ -10,6 +10,9 @@
   - openvswitch操作请见 [openvswitch操作](docs/ovs-tutorial.md)
 - 拿到已经准备好的ubuntu镜像，用config.xml实现安装
   - 如果你想研究qemu的虚拟机中的配置，可以看 [qemu虚拟机中的环境配置](docs/qemu-vm-preparation.md)
+  - 镜像都是统一的账号密码：
+    - user：`ubuntu`
+    - password: `123456`
 
 注意：这边会有很多linux的权限问题，请按照报错提示慢慢解决！下面给出其中一种权限问题：
 
